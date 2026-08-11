@@ -226,23 +226,61 @@ $('#run').onclick=async()=>{
 };
 
 function parse(text){
-  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
-  detected.league=(lines[0]||'').replace(/^[\u00ab\u00bb|.\s]+/,'');
-  const nums=text.match(/\d+(?:[.,]\d+)?(?:\/\d+)?/g)||[];
-  const plain=nums.filter(n=>!n.includes('/')).map(n=>parseFloat(n.replace(',','.')));
-  const slash=(text.match(/\b\d+\/\d+\b/g)||[]);
-  const ints=plain.filter(Number.isInteger);
   const set=(k,s,v)=>{const el=document.querySelector('input[data-k="'+k+'"][data-s="'+s+'"]');if(el&&v!=null&&!Number.isNaN(v))el.value=v};
-  const hasXG=/xG/i.test(text);
-  if(ints.length>=2){set('goals','h',ints[0]);set('goals','a',ints[1]);}
-  if(hasXG){const decs=plain.filter(n=>!Number.isInteger(n));if(decs.length>=2){set('xg','h',decs[0]);set('xg','a',decs[1]);}}
-  const after=ints.slice(2);
-  if(after.length>=2){set('attacks','h',after[0]);set('attacks','a',after[1]);}
-  if(after.length>=4){set('danger','h',after[2]);set('danger','a',after[3]);}
-  if(/\u039a\u03b1\u03c4\u03bf\u03c7\u03ae|\u03ba\u03b1\u03c4\u03bf\u03c7\u03ae|Possession/i.test(text)&&after.length>=6){set('poss','h',after[4]);set('poss','a',after[5]);}
-  if(slash[0]){const p=slash[0].split('/').map(Number);set('shots','h',p[0]);set('ontarget','h',p[1]);}
-  if(slash[1]){const p=slash[1].split('/').map(Number);set('shots','a',p[0]);set('ontarget','a',p[1]);}
-  const scoreLine=lines.find(l=>/\d\s+\d/.test(l))||'';
+  const put=(k,pair)=>{if(!pair)return;if(pair[0]!=null)set(k,'h',pair[0]);if(pair[1]!=null)set(k,'a',pair[1]);};
+  // strip junk symbols the OCR invents from arrows / percent circles / colons
+  const clean=s=>s.replace(/[\u00bb\u00ab\u2039\u203a%;:>_|\u00b7\u2022]/g,' ');
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const joined=clean(text);
+  detected.league=(lines[0]||'').replace(/^[\u00ab\u00bb|.\s]+/,'');
+
+  // 1) SCORE — first "N N" in top lines
+  let scoreLine='';
+  for(const l of lines.slice(0,6)){
+    const m=clean(l).match(/(\d+)\s+(\d+)/);
+    if(m){put('goals',[+m[1],+m[2]]);scoreLine=l;break;}
+  }
+
+  // 2) The circular stats share one values row; order is fixed left-to-right.
+  const order=[];
+  if(/\u0395\u03c0\u03b9\u03b8\u03ad\u03c3/i.test(text))order.push('attacks');
+  if(/\u0395\u03c0\u03b9\u03ba\u03af\u03bd\u03b4\u03c5\u03bd/i.test(text))order.push('danger');
+  if(/\u039a\u03b1\u03c4\u03bf\u03c7|Possession/i.test(text))order.push('poss');
+  let valRow=null;
+  for(let i=0;i<lines.length;i++){
+    if(/\u0395\u03c0\u03b9\u03b8\u03ad\u03c3/i.test(lines[i])){
+      for(let j=i+1;j<Math.min(i+3,lines.length);j++){
+        const ints=(clean(lines[j]).match(/\d+/g)||[]);
+        if(ints.length>=2){valRow=ints.map(Number);break;}
+      }
+      break;
+    }
+  }
+  if(valRow){
+    let idx=0;
+    for(const key of order){
+      let h=valRow[idx],a=valRow[idx+1];
+      if(key==='poss'&&h!=null&&a!=null){
+        // repair dropped digit: possession pair should sum ~100
+        if(h<10&&a>=10&&h*10+a>=95&&h*10+a<=105)h*=10;
+        else if(a<10&&h>=10&&h+a*10>=95&&h+a*10<=105)a*=10;
+        else if(h<10&&a<10&&Math.abs(h*10+a*10-100)<=10){h*=10;a*=10;}
+      }
+      put(key,[h,a]);idx+=2;
+    }
+  }
+
+  // 3) SHOTS — two "X/Y" tokens, home first
+  const slashes=(joined.match(/\d+\s*\/\s*\d+/g)||[]).map(s=>s.replace(/\s/g,''));
+  if(slashes[0]){const p=slashes[0].split('/').map(Number);set('shots','h',p[0]);set('ontarget','h',p[1]);}
+  if(slashes[1]){const p=slashes[1].split('/').map(Number);set('shots','a',p[0]);set('ontarget','a',p[1]);}
+
+  // 4) xG only if labelled
+  if(/xG/i.test(text)){
+    const decs=(joined.match(/\d+[.,]\d+/g)||[]).map(x=>parseFloat(x.replace(',','.')));
+    if(decs.length>=2)put('xg',[decs[0],decs[1]]);
+  }
+
   detected.score=scoreLine;
   $('#detected').innerHTML='<span>\u039b\u03af\u03b3\u03ba\u03b1:</span> '+(detected.league||'\u2014')+'<br><span>\u0391\u03b3\u03ce\u03bd\u03b1\u03c2:</span> '+(scoreLine||'(\u03ad\u03bb\u03b5\u03b3\u03be\u03b5 \u03b1\u03c0\u03cc \u03c4\u03b7 \u03c6\u03c9\u03c4\u03cc)');
   validate();
