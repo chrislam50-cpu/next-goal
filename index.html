@@ -1,0 +1,402 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Next Goal · Live Read</title>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<style>
+  :root{
+    --bg:#080b10; --turf:#0c1c14; --panel:#111721; --panel2:#19212d; --line:#242f3d;
+    --ink:#e9eff5; --dim:#7a8898; --home:#4ea1d3; --away:#e0544e;
+    --yes:#3fb68b; --mid:#e8b84e; --no:#c85a54; --mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(ellipse 120% 55% at 50% 0%,var(--turf),var(--bg) 55%);
+    color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.5;min-height:100vh}
+  .wrap{max-width:720px;margin:0 auto;padding:16px}
+  h1{margin:0 0 2px;font-size:15px;font-weight:700;letter-spacing:.3px}
+  .sub{font-size:11.5px;color:var(--dim);margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .card h2{margin:0;padding:9px 14px;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.6px;color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);
+    display:flex;justify-content:space-between;align-items:center}
+  .pad{padding:13px}
+  .tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--panel);border:1px solid var(--line);color:var(--dim);font-weight:600}
+  .warn{font-size:11px;color:var(--mid);margin-top:8px;display:none}
+  .drop{border:1.5px dashed var(--line);border-radius:9px;padding:16px;text-align:center;color:var(--dim);
+    cursor:pointer;transition:.15s;font-size:12.5px}
+  .drop:hover,.drop.over{border-color:var(--home);color:var(--ink);background:var(--panel2)}
+  .drop b{color:var(--home)}
+  #prev{margin-top:10px;max-width:100%;border-radius:7px;display:none;border:1px solid var(--line)}
+  button{font:600 13px system-ui;border:1px solid var(--line);background:var(--panel2);color:var(--ink);
+    padding:8px 13px;border-radius:8px;cursor:pointer;transition:.15s}
+  button:hover:not(:disabled){border-color:var(--home);color:#fff}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.go{background:var(--home);border-color:var(--home);color:#080b10}
+  button.save{background:var(--yes);border-color:var(--yes);color:#080b10}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px}
+  .bar{height:6px;background:var(--panel2);border-radius:3px;overflow:hidden;margin-top:9px;display:none}
+  .bar>i{display:block;height:100%;width:0;background:var(--home);transition:width .2s}
+  .status{font-size:11.5px;color:var(--dim);margin-top:6px;min-height:14px;font-family:var(--mono)}
+  .detected{font-size:12.5px;margin:2px 0 0;color:var(--ink)}
+  .detected span{color:var(--dim)}
+  .minute{display:flex;gap:9px;align-items:center;margin-top:11px}
+  .minute label{font-size:12px;color:var(--dim)}
+  .minute input{width:62px;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    padding:8px;border-radius:7px;font:700 15px var(--mono);text-align:center}
+  .half{display:flex;gap:6px}
+  .half button{padding:6px 10px;font-size:12px}
+  .half button.on{background:var(--home);border-color:var(--home);color:#080b10}
+  .met{display:grid;grid-template-columns:1fr auto auto;gap:5px 8px;margin-top:10px;font-size:12.5px}
+  .met input{width:54px;background:var(--bg);border:1px solid var(--line);color:var(--ink);
+    padding:5px;border-radius:6px;font:13px var(--mono);text-align:center}
+  .met .name{color:var(--dim)}
+  .met .head{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:center;font-weight:700}
+  .met input.hi{border-left:2px solid var(--home)} .met input.ai{border-left:2px solid var(--away)}
+  .snapline{display:flex;justify-content:space-between;align-items:center;padding:8px 11px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;font-size:12.5px;margin-bottom:6px}
+  .snapline .m{font:700 13px var(--mono);color:var(--home)}
+  .snapline .x{cursor:pointer;color:var(--dim)} .snapline .x:hover{color:var(--away)}
+  .empty{padding:14px;text-align:center;color:var(--dim);font-size:12px}
+  .verdict{padding:20px 16px}
+  .vhead{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:14px;text-align:center}
+  .probwrap{max-width:440px;margin:0 auto}
+  .probtop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .problab{font-size:12px;color:var(--dim)}
+  .probval{font:800 26px var(--mono)}
+  .probval.yes{color:var(--yes)} .probval.mid{color:var(--mid)} .probval.no{color:var(--no)}
+  .pbar{height:22px;border-radius:6px;background:var(--panel2);overflow:hidden;position:relative;border:1px solid var(--line)}
+  .pbar>i{display:block;height:100%;transition:width .35s ease}
+  .pticks{position:absolute;inset:0;pointer-events:none}
+  .pticks span{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.14)}
+  .scale{display:flex;justify-content:space-between;font-size:9.5px;color:var(--dim);margin-top:3px;font-family:var(--mono)}
+  .desc{text-align:center;font:800 20px system-ui;margin:16px 0 4px}
+  .desc.yes{color:var(--yes)} .desc.mid{color:var(--mid)} .desc.no{color:var(--no)}
+  .odds{text-align:center;font-size:13px;color:var(--ink);margin-top:8px}
+  .odds b{font-family:var(--mono);font-size:17px}
+  .odds .who{color:var(--dim);font-size:12px}
+  .foot{padding:11px 14px;border-top:1px solid var(--line);font-size:11px;color:var(--dim);line-height:1.6}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Next Goal &middot; Live Read</h1>
+  <div class="sub">2 screenshots (&alpha;&rho;&chi;&#942; &amp; &tau;&#974;&rho;&alpha;) &rarr; &pi;&iota;&theta;&alpha;&nu;&#972;&tau;&eta;&tau;&alpha; &gamma;&kappa;&omicron;&lambda; + &epsilon;&lambda;&#940;&chi;&iota;&sigma;&tau;&eta; &alpha;&pi;&#972;&delta;&omicron;&sigma;&eta; &gamma;&iota;&alpha; value.</div>
+
+  <div class="card">
+    <h2>Snapshot <span id="snapnum" class="tag">#1</span></h2>
+    <div class="pad">
+      <div class="drop" id="drop">&Sigma;&#973;&rho;&epsilon; screenshot, <b>&kappa;&lambda;&iota;&kappa;</b>, &#942; <b>Ctrl+V</b></div>
+      <input type="file" id="file" accept="image/*" hidden>
+      <img id="prev" alt="">
+      <div class="row">
+        <button class="go" id="run" disabled>&Alpha;&nu;&#940;&gamma;&nu;&omega;&sigma;&eta;</button>
+        <button id="clr" disabled>&times;</button>
+      </div>
+      <div class="bar" id="bar"><i></i></div>
+      <div class="status" id="status">&#904;&tau;&omicron;&iota;&mu;&omicron;.</div>
+      <div class="warn" id="warn">&#916;&iota;&alpha;&rho;&kappa;&epsilon;&#943; &pi;&omicron;&lambda;&#973;; &Pi;&#940;&tau;&eta;&sigma;&epsilon; &xi;&alpha;&nu;&#940; &Alpha;&nu;&#940;&gamma;&nu;&omega;&sigma;&eta; &#942; &sigma;&upsilon;&mu;&pi;&lambda;&#942;&rho;&omega;&sigma;&epsilon; &tau;&iota;&mu;&#941;&sigmaf; &chi;&epsilon;&iota;&rho;&omicron;&kappa;&#943;&nu;&eta;&tau;&alpha;.</div>
+      <div class="detected" id="detected"></div>
+      <div class="minute">
+        <label>&Lambda;&epsilon;&pi;&tau;&#972;:</label>
+        <input id="minute" type="text" inputmode="numeric" placeholder="45">
+        <div class="half">
+          <button data-h="1" id="h1" class="on">&Alpha;&prime; &eta;&mu;.</button>
+          <button data-h="2" id="h2">&Beta;&prime; &eta;&mu;.</button>
+        </div>
+      </div>
+      <div class="met" id="metrics"></div>
+      <div class="row"><button class="save" id="save" disabled>&Alpha;&pi;&omicron;&theta;&#942;&kappa;&epsilon;&upsilon;&sigma;&eta; snapshot</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Snapshots</h2>
+    <div class="pad"><div id="snaps"><div class="empty">&Kappa;&alpha;&nu;&#941;&nu;&alpha; &alpha;&kappa;&#972;&mu;&eta;.</div></div></div>
+  </div>
+
+  <div class="card" id="verdictCard" style="display:none">
+    <h2>&Pi;&iota;&theta;&alpha;&nu;&#972;&tau;&eta;&tau;&alpha; Next Goal &middot; &upsilon;&pi;&#972;&lambda;&omicron;&iota;&pi;&omicron; &eta;&mu;&iota;&chi;&rho;&#972;&nu;&omicron;&upsilon;</h2>
+    <div id="verdict"></div>
+    <div class="foot" id="vfoot"></div>
+  </div>
+
+  <div class="row"><button id="reset" disabled>&Nu;&#941;&omicron;&sigmaf; &alpha;&gamma;&#974;&nu;&alpha;&sigmaf;</button></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+const METRICS=[
+  {k:'ontarget',lab:'\u03a3\u03bf\u03c5\u03c4 \u03c3\u03c4\u03bf \u03c4\u03ad\u03c1\u03bc\u03b1',w:3.0,press:true},
+  {k:'shots',   lab:'\u03a3\u03bf\u03c5\u03c4',           w:1.6,press:true},
+  {k:'xg',      lab:'xG',             w:9.0,press:true,dec:true},
+  {k:'danger',  lab:'\u0395\u03c0\u03b9\u03ba\u03af\u03bd\u03b4\u03c5\u03bd\u03b5\u03c2 \u03b5\u03c0\u03b9\u03b8.',w:1.0,press:true},
+  {k:'attacks', lab:'\u0395\u03c0\u03b9\u03b8\u03ad\u03c3\u03b5\u03b9\u03c2',      w:0.35,press:true},
+  {k:'poss',    lab:'\u039a\u03b1\u03c4\u03bf\u03c7\u03ae %',       w:0.0,press:false},
+  {k:'corners', lab:'\u039a\u03cc\u03c1\u03bd\u03b5\u03c1',         w:0.8,press:true},
+  {k:'goals',   lab:'\u0393\u03ba\u03bf\u03bb',           w:0,  press:false}
+];
+const K=0.0135;
+let img=null,snaps=[],half=1;
+let detected={league:'',score:''};
+let worker=null, workerReady=false;
+
+(function(){const g=$('#metrics');
+  g.insertAdjacentHTML('beforeend','<div class="head"></div><div class="head">\u0393\u03b7\u03c0.</div><div class="head">\u03a6\u03b9\u03bb.</div>');
+  METRICS.forEach(m=>g.insertAdjacentHTML('beforeend',
+    '<div class="name">'+m.lab+'</div>'+
+    '<input class="hi" data-k="'+m.k+'" data-s="h" inputmode="decimal">'+
+    '<input class="ai" data-k="'+m.k+'" data-s="a" inputmode="decimal">'));
+})();
+
+$('#h1').onclick=()=>{half=1;$('#h1').classList.add('on');$('#h2').classList.remove('on');validate()};
+$('#h2').onclick=()=>{half=2;$('#h2').classList.add('on');$('#h1').classList.remove('on');validate()};
+
+const drop=$('#drop'),file=$('#file'),prev=$('#prev');
+drop.onclick=()=>file.click();file.onchange=e=>load(e.target.files[0]);
+['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over')}));
+drop.addEventListener('drop',e=>{if(e.dataTransfer.files[0])load(e.dataTransfer.files[0])});
+window.addEventListener('paste',e=>{for(const it of e.clipboardData.items)if(it.type.startsWith('image/'))load(it.getAsFile())});
+function load(f){if(!f||!f.type.startsWith('image/'))return;const r=new FileReader();
+  r.onload=()=>{img=r.result;prev.src=img;prev.style.display='block';$('#run').disabled=false;$('#clr').disabled=false;st('\u0388\u03c4\u03bf\u03b9\u03bc\u03bf \u03b3\u03b9\u03b1 \u03b1\u03bd\u03ac\u03b3\u03bd\u03c9\u03c3\u03b7.')};r.readAsDataURL(f)}
+$('#clr').onclick=()=>{img=null;prev.style.display='none';file.value='';$('#run').disabled=true;$('#clr').disabled=true;st('')};
+function st(t){$('#status').textContent=t}
+function setBar(p){$('#bar').style.display='block';$('#bar').querySelector('i').style.width=Math.round(p)+'%'}
+function hideBar(){setTimeout(()=>{$('#bar').style.display='none'},700)}
+
+// --- Persistent worker with staged progress + fallback CDN for language data ---
+const LANG_PATHS=[
+  'https://tessdata.projectnaptha.com/4.0.0',
+  'https://cdn.jsdelivr.net/npm/@tesseract.js-data/ell/4.0.0_best_int'
+];
+async function ensureWorker(){
+  if(workerReady && worker) return worker;
+  st('\u0391\u03c1\u03c7\u03b9\u03ba\u03bf\u03c0\u03bf\u03af\u03b7\u03c3\u03b7 (1\u03b7 \u03c6\u03bf\u03c1\u03ac, \u03ba\u03b1\u03c4\u03b5\u03b2\u03ac\u03b6\u03b5\u03b9 \u03bc\u03bf\u03bd\u03c4\u03ad\u03bb\u03bf ~15MB)...');
+  setBar(3);
+  worker=await Tesseract.createWorker('ell+eng',1,{
+    langPath:LANG_PATHS[0],
+    logger:m=>{
+      // stages: loading language traineddata / initializing api / recognizing text
+      let base=0,label='';
+      if(m.status && m.status.indexOf('load')>-1){base=5;label='\u039b\u03ae\u03c8\u03b7 \u03bc\u03bf\u03bd\u03c4\u03ad\u03bb\u03bf\u03c5';}
+      else if(m.status && m.status.indexOf('initiali')>-1){base=45;label='\u0391\u03c1\u03c7\u03b9\u03ba\u03bf\u03c0\u03bf\u03af\u03b7\u03c3\u03b7';}
+      else if(m.status==='recognizing text'){base=60;label='\u0391\u03bd\u03ac\u03b3\u03bd\u03c9\u03c3\u03b7';}
+      if(m.progress!=null){
+        const span=(m.status==='recognizing text')?40:(base<45?40:15);
+        setBar(Math.min(99,base+m.progress*span));
+      }
+      if(label)st(label+' '+Math.round((m.progress||0)*100)+'%');
+    }
+  });
+  workerReady=true;
+  return worker;
+}
+
+$('#run').onclick=async()=>{
+  if(!img)return;
+  $('#run').disabled=true;$('#warn').style.display='none';
+  let done=false;
+  // 30s timeout guard so the user is never left hanging
+  const guard=setTimeout(()=>{
+    if(!done){
+      st('\u0391\u03c1\u03b3\u03b5\u03af \u03b1\u03c3\u03c5\u03bd\u03ae\u03b8\u03b9\u03c3\u03c4\u03b1 \u2014 \u03af\u03c3\u03c9\u03c2 \u03b1\u03c1\u03b3\u03cc \u03b4\u03af\u03ba\u03c4\u03c5\u03bf.');
+      $('#warn').style.display='block';
+      $('#run').disabled=false;
+    }
+  },30000);
+  try{
+    const w=await ensureWorker();
+    st('\u0391\u03bd\u03ac\u03b3\u03bd\u03c9\u03c3\u03b7...');
+    const {data}=await w.recognize(img);
+    done=true;clearTimeout(guard);
+    setBar(100);
+    parse(data.text);
+    st('\u0388\u03bb\u03b5\u03b3\u03be\u03b5 \u03c4\u03b9\u03bc\u03ad\u03c2, \u03b2\u03ac\u03bb\u03b5 \u03bb\u03b5\u03c0\u03c4\u03cc, \u03b1\u03c0\u03bf\u03b8\u03ae\u03ba\u03b5\u03c5\u03c3\u03b5.');
+    hideBar();
+  }catch(e){
+    done=true;clearTimeout(guard);
+    st('\u03a3\u03c6\u03ac\u03bb\u03bc\u03b1: '+(e.message||e)+' \u2014 \u03b3\u03c1\u03ac\u03c8\u03b5 \u03c4\u03b9\u03bc\u03ad\u03c2 \u03c7\u03b5\u03b9\u03c1\u03bf\u03ba\u03af\u03bd\u03b7\u03c4\u03b1.');
+    $('#warn').style.display='block';
+    hideBar();
+  }finally{
+    $('#run').disabled=false;
+  }
+};
+
+function parse(text){
+  const set=(k,s,v)=>{const el=document.querySelector('input[data-k="'+k+'"][data-s="'+s+'"]');if(el&&v!=null&&!Number.isNaN(v))el.value=v};
+  const put=(k,pair)=>{if(!pair)return;if(pair[0]!=null)set(k,'h',pair[0]);if(pair[1]!=null)set(k,'a',pair[1]);};
+  const clean=s=>s.replace(/[\u00bb\u00ab\u2039\u203a%;:>_\u00b7\u2022]/g,' ');
+  const lines=text.split('\n').map(l=>l.trim()).filter(Boolean);
+  const joined=clean(text);
+  detected.league=(lines[0]||'').replace(/^[\u00ab\u00bb|.\s]+/,'');
+
+  // 1) SCORE — anchored between team names (Greek/Latin letters), not just first "N N"
+  let scoreLine='';
+  for(const l of lines.slice(0,6)){
+    const c=clean(l);
+    let m=c.match(/[\u0370-\u03ff'A-Za-z][\u0370-\u03ff'A-Za-z .]*\s+(\d+)\s+(\d+)\s+[\u0370-\u03ff'A-Za-z]/);
+    if(m){put('goals',[+m[1],+m[2]]);scoreLine=l;break;}
+  }
+  if(!scoreLine){ // fallback: a top line with digits AND Greek letters
+    for(const l of lines.slice(0,6)){
+      const c=clean(l);const m=c.match(/(\d+)\s+(\d+)/);
+      if(m&&/[\u0370-\u03ff]/.test(c)){put('goals',[+m[1],+m[2]]);scoreLine=l;break;}
+    }
+  }
+
+  // 2) circular stats row (attacks, danger, [poss]) — positional, home left
+  const order=[];
+  if(/\u0395\u03c0\u03b9\u03b8\u03ad\u03c3/i.test(text))order.push('attacks');
+  if(/\u0395\u03c0\u03b9\u03ba\u03af\u03bd\u03b4\u03c5\u03bd/i.test(text))order.push('danger');
+  if(/\u039a\u03b1\u03c4\u03bf\u03c7|Possession/i.test(text))order.push('poss');
+  let valRow=null;
+  for(let i=0;i<lines.length;i++){
+    if(/\u0395\u03c0\u03b9\u03b8\u03ad\u03c3/i.test(lines[i])){
+      for(let j=i+1;j<Math.min(i+3,lines.length);j++){
+        const ints=(clean(lines[j]).match(/\d+/g)||[]);
+        if(ints.length>=2){valRow=ints.map(Number);break;}
+      }
+      break;
+    }
+  }
+  if(valRow){
+    let idx=0;
+    for(const key of order){
+      let h=valRow[idx],a=valRow[idx+1];
+      if(key==='poss'&&h!=null&&a!=null){
+        if(h<10&&a>=10&&h*10+a>=95&&h*10+a<=105)h*=10;
+        else if(a<10&&h>=10&&h+a*10>=95&&h+a*10<=105)a*=10;
+        else if(h<10&&a<10&&Math.abs(h*10+a*10-100)<=10){h*=10;a*=10;}
+      }
+      put(key,[h,a]);idx+=2;
+    }
+  }
+
+  // 3) SHOTS — tolerant separator (/ \ | l I), two groups, home first
+  const sepPat=/(\d{1,2})\s*[\/\\|lI]\s*(\d{1,2})/g;
+  let shotPairs=[];
+  for(const l of lines){
+    const c=clean(l);const local=[];let m;sepPat.lastIndex=0;
+    while((m=sepPat.exec(c))!==null)local.push([+m[1],+m[2]]);
+    if(local.length>=2){shotPairs=local.slice(0,2);break;}
+    if(local.length===1&&shotPairs.length<2)shotPairs.push(local[0]);
+  }
+  if(shotPairs[0]){set('shots','h',shotPairs[0][0]);set('ontarget','h',shotPairs[0][1]);}
+  if(shotPairs[1]){set('shots','a',shotPairs[1][0]);set('ontarget','a',shotPairs[1][1]);}
+
+  // 4) CORNERS + CARDS — icon row, positional & mirrored:
+  //    home [flag=corner, red, yellow]  ...shots...  away [yellow, red, flag=corner]
+  for(const l of lines){
+    const c=clean(l);
+    const slashCount=(c.match(/\d{1,2}\s*[\/\\|lI]\s*\d{1,2}/g)||[]).length;
+    if(slashCount>=1){
+      const stripped=c.replace(/\d{1,2}\s*[\/\\|lI]\s*\d{1,2}/g,' ');
+      const icons=(stripped.match(/\d+/g)||[]).map(Number);
+      if(icons.length>=6){
+        put('corners',[icons[0],icons[5]]);
+        put('red',[icons[1],icons[4]]);
+        put('yellow',[icons[2],icons[3]]);
+      }
+      break;
+    }
+  }
+
+  // 5) xG
+  if(/xG/i.test(text)){
+    const decs=(joined.match(/\d+[.,]\d+/g)||[]).map(x=>parseFloat(x.replace(',','.')));
+    if(decs.length>=2)put('xg',[decs[0],decs[1]]);
+  }
+
+  detected.score=scoreLine;
+  $('#detected').innerHTML='<span>\u039b\u03af\u03b3\u03ba\u03b1:</span> '+(detected.league||'\u2014')+'<br><span>\u0391\u03b3\u03ce\u03bd\u03b1\u03c2:</span> '+(scoreLine||'(\u03ad\u03bb\u03b5\u03b3\u03be\u03b5 \u03b1\u03c0\u03cc \u03c4\u03b7 \u03c6\u03c9\u03c4\u03cc)');
+  validate();
+}
+
+$('#metrics').addEventListener('input',validate);
+$('#minute').addEventListener('input',validate);
+function validate(){
+  const okMin=$('#minute').value.trim()!=='';
+  const okVal=[...document.querySelectorAll('#metrics input')].some(i=>i.value.trim()!=='');
+  $('#save').disabled=!(okMin&&okVal);
+}
+
+$('#save').onclick=()=>{
+  const snap={minute:parseFloat($('#minute').value)||0,half,vals:{}};
+  METRICS.forEach(m=>{
+    const h=document.querySelector('input[data-k="'+m.k+'"][data-s="h"]').value;
+    const a=document.querySelector('input[data-k="'+m.k+'"][data-s="a"]').value;
+    snap.vals[m.k]={h:h===''?null:parseFloat(h),a:a===''?null:parseFloat(a)};
+  });
+  snaps.push(snap);snaps.sort((x,y)=>(x.half-y.half)||(x.minute-y.minute));
+  document.querySelectorAll('#metrics input').forEach(i=>i.value='');
+  $('#minute').value='';$('#clr').click();$('#snapnum').textContent='#'+(snaps.length+1);
+  renderSnaps();decide();validate();
+};
+
+function renderSnaps(){
+  const box=$('#snaps');
+  if(!snaps.length){box.innerHTML='<div class="empty">\u039a\u03b1\u03bd\u03ad\u03bd\u03b1 \u03b1\u03ba\u03cc\u03bc\u03b7.</div>';$('#reset').disabled=true;return;}
+  box.innerHTML=snaps.map((s,i)=>{const g=s.vals.goals,ot=s.vals.ontarget;
+    return '<div class="snapline"><span><span class="m">'+(s.half===2?"\u0392\u2032 ":"\u0391\u2032 ")+s.minute+'\''+'</span>'+
+      ' \u2014 \u03b3\u03ba\u03bf\u03bb '+(g.h!=null?g.h:'?')+'-'+(g.a!=null?g.a:'?')+', \u03c3\u03c4\u03bf \u03c4\u03ad\u03c1\u03bc\u03b1 '+(ot.h!=null?ot.h:'?')+'-'+(ot.a!=null?ot.a:'?')+'</span>'+
+      '<span class="x" data-i="'+i+'">\u2715</span></div>'}).join('');
+  box.querySelectorAll('.x').forEach(x=>x.onclick=e=>{snaps.splice(+e.target.dataset.i,1);renderSnaps();decide()});
+  $('#reset').disabled=false;
+}
+
+function decide(){
+  const card=$('#verdictCard'),out=$('#verdict'),foot=$('#vfoot');
+  if(snaps.length<2){card.style.display='none';return;}
+  card.style.display='block';
+  const A=snaps[snaps.length-2],B=snaps[snaps.length-1];
+  const s1=A.minute<=B.minute?A:B, s2=A.minute<=B.minute?B:A;
+  const dt=Math.max(1,s2.minute-s1.minute);
+  const endHalf=(s2.half===1)?45:90;
+  const remain=Math.max(0,endHalf-s2.minute);
+  let rateH=0,rateA=0;
+  METRICS.forEach(m=>{
+    if(!m.press||m.w===0)return;
+    const a=s1.vals[m.k]||{},b=s2.vals[m.k]||{};
+    if(a.h==null||b.h==null||a.a==null||b.a==null)return;
+    rateH+=((b.h-a.h)/dt)*m.w; rateA+=((b.a-a.a)/dt)*m.w;
+  });
+  const rateTotal=Math.max(0,rateH+rateA);
+  const lambda=K*rateTotal*remain;
+  let p=1-Math.exp(-lambda);
+  if(!isFinite(p)||p<0)p=0; if(p>0.97)p=0.97;
+  const minOdds=p>0.01?(1/p):99;
+  const denom=(rateH+rateA)>0?(rateH+rateA):1;
+  const barH=Math.round(rateH/denom*100),barA=100-barH;
+  let band,cls;
+  if(remain<4){band='\u039b\u0399\u0393\u039f\u03a3 \u03a7\u03a1\u039f\u039d\u039f\u03a3';cls='no';}
+  else if(p>=0.55){band='\u0391\u039e\u0399\u0396\u0395\u0399';cls='yes';}
+  else if(p>=0.38){band='\u039f\u03a1\u0399\u0391\u039a\u039f';cls='mid';}
+  else{band='\u0394\u0395\u039d \u0391\u039e\u0399\u0396\u0395\u0399';cls='no';}
+  const pct=Math.round(p*100);
+  const fill=cls==='yes'?'var(--yes)':cls==='mid'?'var(--mid)':'var(--no)';
+  out.innerHTML=
+    '<div class="verdict">'+
+      '<div class="vhead">\u03a5\u03c0\u03cc\u03bb\u03bf\u03b9\u03c0\u03bf '+(s2.half===1?'\u0391\u2032':'\u0392\u2032')+' \u03b7\u03bc\u03b9\u03c7\u03c1\u03cc\u03bd\u03bf\u03c5 \u00b7 ~'+remain+'\u2032 \u00b7 \u03bf\u03c0\u03bf\u03b9\u03b1\u03b4\u03ae\u03c0\u03bf\u03c4\u03b5 \u03bf\u03bc\u03ac\u03b4\u03b1</div>'+
+      '<div class="probwrap">'+
+        '<div class="probtop"><span class="problab">\u03a0\u03b9\u03b8\u03b1\u03bd\u03cc\u03c4\u03b7\u03c4\u03b1 \u03b3\u03ba\u03bf\u03bb</span><span class="probval '+cls+'">'+p.toFixed(2)+'</span></div>'+
+        '<div class="pbar"><i style="width:'+pct+'%;background:'+fill+'"></i>'+
+          '<div class="pticks"><span style="left:38%"></span><span style="left:55%"></span></div></div>'+
+        '<div class="scale"><span>0</span><span>0.38</span><span>0.55</span><span>1</span></div>'+
+      '</div>'+
+      '<div class="desc '+cls+'">'+band+'</div>'+
+      (band==='\u039b\u0399\u0393\u039f\u03a3 \u03a7\u03a1\u039f\u039d\u039f\u03a3'?'':
+      '<div class="odds">\u0395\u03bb\u03ac\u03c7\u03b9\u03c3\u03c4\u03b7 \u03b1\u03c0\u03cc\u03b4\u03bf\u03c3\u03b7 \u03b3\u03b9\u03b1 value: <b>'+minOdds.toFixed(2)+'</b>'+
+        '<div class="who">\u03a0\u03ac\u03bd\u03c9 \u03b1\u03c0\u03cc \u03b1\u03c5\u03c4\u03cc \u2192 value (\u03ba\u03b1\u03c4\u03ac \u03c4\u03b7\u03bd \u03b5\u03ba\u03c4\u03af\u03bc\u03b7\u03c3\u03b7). \u03a0\u03af\u03b5\u03c3\u03b7: '+barH+'% / '+barA+'%</div></div>')+
+    '</div>';
+  foot.innerHTML='\u03bb (\u03b1\u03bd\u03b1\u03bc. \u03b3\u03ba\u03bf\u03bb \u03c3\u03b5 '+remain+'\u2032) = '+lambda.toFixed(2)+' \u00b7 \u03c1\u03c5\u03b8\u03bc\u03cc\u03c2 \u03c0\u03af\u03b5\u03c3\u03b7\u03c2 '+rateTotal.toFixed(2)+' \u03bc\u03bf\u03bd./\u03bb\u03b5\u03c0\u03c4\u03cc \u03c3\u03c4\u03bf \u03b4\u03b9\u03ac\u03c3\u03c4\u03b7\u03bc\u03b1 '+dt+'\u2032. Poisson: P = 1 \u2212 e^(\u2212\u03bb). Fair odds = 1/P.'+
+    '<br><b>\u0395\u03ba\u03c4\u03af\u03bc\u03b7\u03c3\u03b7 heuristic, \u03bc\u03b7 \u03c4\u03b5\u03c3\u03c4\u03b1\u03c1\u03b9\u03c3\u03bc\u03ad\u03bd\u03b7</b> \u2014 input \u03c3\u03c4\u03b7\u03bd \u03ba\u03c1\u03af\u03c3\u03b7 \u03c3\u03bf\u03c5, \u03cc\u03c7\u03b9 \u03ad\u03c4\u03bf\u03b9\u03bc\u03bf edge.';
+}
+
+$('#reset').onclick=()=>{if(confirm('\u039d\u03ad\u03bf\u03c2 \u03b1\u03b3\u03ce\u03bd\u03b1\u03c2;')){snaps=[];detected={league:'',score:''};$('#snapnum').textContent='#1';$('#detected').innerHTML='';renderSnaps();decide()}};
+renderSnaps();
+</script>
+</body>
+</html>
