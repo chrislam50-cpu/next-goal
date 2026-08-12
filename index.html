@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Next Goal · Live Read</title>
+<style>
+  :root{
+    --bg:#080b10;--turf:#0c1c14;--panel:#111721;--panel2:#19212d;--line:#242f3d;
+    --ink:#e9eff5;--dim:#7a8898;--home:#4ea1d3;--away:#e0544e;
+    --yes:#3fb68b;--mid:#e8b84e;--no:#c85a54;--mono:ui-monospace,'Cascadia Code',Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(ellipse 120% 55% at 50% 0%,var(--turf),var(--bg) 55%);
+    color:var(--ink);font-family:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;line-height:1.5;min-height:100vh}
+  .wrap{max-width:720px;margin:0 auto;padding:16px}
+  h1{margin:0 0 2px;font-size:15px;font-weight:700;letter-spacing:.3px}
+  .sub{font-size:11.5px;color:var(--dim);margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin-bottom:14px;overflow:hidden}
+  .card h2{margin:0;padding:9px 14px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;
+    color:var(--dim);border-bottom:1px solid var(--line);background:var(--panel2);display:flex;justify-content:space-between;align-items:center}
+  .pad{padding:13px}
+  .tag{font-size:10px;padding:2px 7px;border-radius:20px;background:var(--panel);border:1px solid var(--line);color:var(--dim);font-weight:600}
+  button{font:600 13px system-ui;border:1px solid var(--line);background:var(--panel2);color:var(--ink);padding:9px 14px;border-radius:8px;cursor:pointer;transition:.15s}
+  button:hover:not(:disabled){border-color:var(--home);color:#fff}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  button.go{background:var(--home);border-color:var(--home);color:#080b10}
+  button.save{background:var(--yes);border-color:var(--yes);color:#080b10}
+  textarea{width:100%;min-height:90px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:10px;font:12.5px var(--mono);resize:vertical;line-height:1.5}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:11px}
+  .status{font-size:11.5px;color:var(--dim);margin-top:7px;min-height:14px;font-family:var(--mono)}
+  .detected{font-size:12.5px;margin:8px 0 0;color:var(--ink)}
+  .detected span{color:var(--dim)}
+  .teams{display:flex;gap:8px;align-items:center;margin-top:10px}
+  .teams input{flex:1;min-width:0;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:7px 9px;border-radius:7px;font:600 13px system-ui;text-align:center}
+  .teams input.h{border-bottom:2px solid var(--home)} .teams input.a{border-bottom:2px solid var(--away)}
+  .teams .vs{color:var(--dim);font-size:11px}
+  .meta{display:flex;gap:8px;align-items:center;margin-top:9px;flex-wrap:wrap}
+  .meta input{background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:7px 9px;border-radius:7px;font:13px var(--mono);text-align:center}
+  .meta label{font-size:12px;color:var(--dim)}
+  .minute-in{width:60px;font-weight:700!important;font-size:15px!important}
+  .league-in{flex:1;min-width:120px;text-align:left!important;font-family:system-ui!important;font-size:12px!important}
+  .half{display:flex;gap:6px}
+  .half button{padding:6px 10px;font-size:12px}
+  .half button.on{background:var(--home);border-color:var(--home);color:#080b10}
+  .timing{font-size:11.5px;margin-top:7px;padding:7px 10px;border-radius:7px;line-height:1.4;display:none}
+  .timing.show{display:block}
+  .timing.good{background:rgba(63,182,139,.12);border:1px solid rgba(63,182,139,.4);color:#a9e0cb}
+  .timing.warn{background:rgba(232,184,78,.12);border:1px solid rgba(232,184,78,.4);color:#e8cf9a}
+  .timing.bad{background:rgba(200,90,84,.12);border:1px solid rgba(200,90,84,.4);color:#f0b3b0}
+  .met{display:grid;grid-template-columns:1fr auto auto;gap:5px 8px;margin-top:11px;font-size:12.5px}
+  .met input{width:56px;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:6px;border-radius:6px;font:13px var(--mono);text-align:center}
+  .met .name{color:var(--dim)}
+  .met .head{color:var(--dim);font-size:10px;text-transform:uppercase;letter-spacing:.4px;text-align:center;font-weight:700}
+  .met input.hi{border-left:2px solid var(--home)} .met input.ai{border-left:2px solid var(--away)}
+  .met .red-row input{border-left-width:2px;border-left-color:var(--away)}
+  .snapline{display:flex;justify-content:space-between;align-items:center;padding:8px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;font-size:12.5px;margin-bottom:6px}
+  .snapline .m{font:700 13px var(--mono);color:var(--home)}
+  .snapline .x{cursor:pointer;color:var(--dim)} .snapline .x:hover{color:var(--away)}
+  .empty{padding:14px;text-align:center;color:var(--dim);font-size:12px}
+  .redwarn{background:rgba(200,90,84,.15);border:1px solid var(--no);border-radius:9px;padding:10px 13px;margin-bottom:12px;font-size:13px;color:#f0b3b0;display:none}
+  .redwarn.show{display:block}
+  .redwarn b{color:#ff8f89}
+  .verdict{padding:18px 16px}
+  .vhead{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--dim);margin-bottom:12px;text-align:center}
+  .probwrap{max-width:440px;margin:0 auto}
+  .probtop{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .problab{font-size:12px;color:var(--dim)}
+  .probval{font:800 26px var(--mono)}
+  .probval.yes{color:var(--yes)} .probval.mid{color:var(--mid)} .probval.no{color:var(--no)}
+  .pbar{height:22px;border-radius:6px;background:var(--panel2);overflow:hidden;position:relative;border:1px solid var(--line)}
+  .pbar>i{display:block;height:100%;transition:width .35s ease}
+  .pticks{position:absolute;inset:0;pointer-events:none}
+  .pticks span{position:absolute;top:0;bottom:0;width:1px;background:rgba(255,255,255,.16)}
+  .scale{display:flex;justify-content:space-between;font-size:9.5px;color:var(--dim);margin-top:3px;font-family:var(--mono)}
+  .desc{text-align:center;font:800 20px system-ui;margin:14px 0 4px}
+  .desc.yes{color:var(--yes)} .desc.mid{color:var(--mid)} .desc.no{color:var(--no)}
+  .odds{text-align:center;font-size:13px;color:var(--ink);margin-top:8px}
+  .odds b{font-family:var(--mono);font-size:17px}
+  .odds .who{color:var(--dim);font-size:12px}
+  .foot{padding:10px 14px;border-top:1px solid var(--line);font-size:10.5px;color:var(--dim);line-height:1.55}
+  .vverdict{margin-top:12px;padding:12px 14px;border-radius:9px;text-align:center;display:none}
+  .vverdict.show{display:block}
+  .vverdict.value{background:rgba(63,182,139,.14);border:1px solid var(--yes)}
+  .vverdict.novalue{background:rgba(200,90,84,.12);border:1px solid var(--no)}
+  .vverdict .big{font:800 18px system-ui;letter-spacing:.5px}
+  .vverdict.value .big{color:var(--yes)} .vverdict.novalue .big{color:var(--no)}
+  .vverdict .nums{font:12px var(--mono);color:var(--dim);margin-top:6px}
+  .outcome{margin-top:14px;padding-top:12px;border-top:1px dashed var(--line)}
+  .outcome .q{font-size:12px;color:var(--dim);margin-bottom:7px}
+  .obtn{display:flex;gap:6px;flex-wrap:wrap}
+  .obtn button.sel{background:var(--yes);border-color:var(--yes);color:#080b10}
+  .dataset-row{display:flex;justify-content:space-between;align-items:center;padding:7px 11px;background:var(--panel2);border:1px solid var(--line);border-radius:7px;font-size:12px;margin-bottom:5px}
+  .dataset-row.pending{border-color:var(--mid)}
+  .dataset-row .info{font-family:var(--mono)}
+  .dataset-row .pend{color:var(--mid);font-size:10px}
+  .mini{font-size:11px;padding:5px 9px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Next Goal &middot; Live Read</h1>
+  <div class="sub">Επικόλληση από iPhone Live Text (αγγλικά) &rarr; πιθανότητα γκολ + ελάχιστη απόδοση + καταγραφή για calibration.</div>
+
+  <div class="card">
+    <h2>1 &middot; Στοιχεία αγώνα</h2>
+    <div class="pad">
+      <div class="teams">
+        <input class="h" id="teamH" placeholder="Γηπεδούχος">
+        <span class="vs">vs</span>
+        <input class="a" id="teamA" placeholder="Φιλοξενούμενος">
+      </div>
+      <div class="meta">
+        <input class="league-in" id="league" placeholder="Λίγκα / διοργάνωση">
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>2 &middot; Snapshot <span id="snapnum" class="tag">#1</span></h2>
+    <div class="pad">
+      <textarea id="paste" placeholder="Επικόλλησε εδώ το κείμενο από Live Text (Επιλογή όλων → Αντιγραφή)"></textarea>
+      <div class="row">
+        <button class="go" id="parseBtn">Ανάγνωση κειμένου</button>
+        <button id="clearPaste" class="mini">Καθαρισμός</button>
+      </div>
+      <div class="status" id="status">Επικόλλησε το κείμενο και πάτα «Ανάγνωση».</div>
+      <div class="detected" id="detected"></div>
+
+      <div class="meta">
+        <label>Λεπτό:</label>
+        <input class="minute-in" id="minute" inputmode="numeric" placeholder="45">
+        <div class="half">
+          <button data-h="1" id="h1" class="on">Α′ ημ.</button>
+          <button data-h="2" id="h2">Β′ ημ.</button>
+        </div>
+      </div>
+      <div class="timing" id="timingGuide"></div>
+
+      <div class="met" id="metrics"></div>
+      <div class="row"><button class="save" id="save" disabled>Αποθήκευση snapshot</button></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Snapshots</h2>
+    <div class="pad"><div id="snaps"><div class="empty">Κανένα ακόμη.</div></div></div>
+  </div>
+
+  <div class="card" id="verdictCard" style="display:none">
+    <h2>3 &middot; Πιθανότητα Next Goal</h2>
+    <div class="pad" style="padding-bottom:0"><div class="redwarn" id="redwarn"></div></div>
+    <div id="verdict"></div>
+    <div class="pad" id="oddsCheck" style="border-top:1px solid var(--line);display:none">
+      <div class="q" style="font-size:12px;color:var(--dim);margin-bottom:8px">Απόδοση bookie για next goal — βάλ' τη για ετυμηγορία value:</div>
+      <div class="meta" style="margin-top:0">
+        <label>Απόδοση:</label>
+        <input id="liveOdds" inputmode="decimal" style="width:80px;background:var(--bg);border:1px solid var(--line);color:var(--ink);padding:8px;border-radius:7px;font:700 15px var(--mono);text-align:center" placeholder="1.80">
+      </div>
+      <div id="valueVerdict"></div>
+    </div>
+    <div class="foot" id="vfoot"></div>
+    <div class="pad" style="border-top:1px solid var(--line)">
+      <div class="outcome">
+        <div class="q">Έκβαση — έπεσε γκολ στο υπόλοιπο του ημιχρόνου; (συμπλήρωσέ το όταν το μάθεις)</div>
+        <div class="obtn" id="outcomeBtns">
+          <button data-o="h">Ναι · Γηπ.</button>
+          <button data-o="a">Ναι · Φιλ.</button>
+          <button data-o="no">Όχι</button>
+        </div>
+        <div class="row"><button class="save" id="commitRow" disabled>Καταχώρηση γραμμής στο dataset</button></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Dataset <span class="tag" id="dsCount">0 γραμμές</span></h2>
+    <div class="pad">
+      <div id="dsList"><div class="empty">Καμία καταχώρηση.</div></div>
+      <div class="row">
+        <button class="go" id="copyAll">Αντιγραφή όλων (για Sheets)</button>
+        <button id="downloadCsv" class="mini">Κατέβασμα CSV</button>
+        <button id="copyHeader" class="mini">Αντιγραφή κεφαλίδας</button>
+      </div>
+      <div class="status" id="dsStatus"></div>
+    </div>
+  </div>
+
+  <div class="row"><button id="reset">Νέος αγώνας</button></div>
+</div>
+
+<script>
+const $=s=>document.querySelector(s);
+// metric: key,label,weight(momentum),press flag
+const METRICS=[
+  {k:'ontarget',lab:'Σουτ στο τέρμα',w:3.0,press:true},
+  {k:'shots',   lab:'Σουτ',w:1.6,press:true},
+  {k:'xg',      lab:'xG',w:9.0,press:true},
+  {k:'danger',  lab:'Επικίνδυνες επιθ.',w:1.0,press:true},
+  {k:'attacks', lab:'Επιθέσεις',w:0.35,press:true},
+  {k:'poss',    lab:'Κατοχή %',w:0.0,press:false},
+  {k:'corners', lab:'Κόρνερ',w:0.8,press:true},
+  {k:'red',     lab:'Κόκκινες',w:0.0,press:false},
+  {k:'goals',   lab:'Γκολ',w:0.0,press:false}
+];
+const K=0.0135;
+let snaps=[], half=1, matchId=null;
+let dataset=[];
+let pendingOutcome=null;   // 'h'|'a'|'no'
+let lastAnalysis=null;     // holds computed row awaiting outcome
+
+// ---- persistence ----
+const LS_KEY='nextgoal_dataset_v1';
+function saveDS(){try{localStorage.setItem(LS_KEY,JSON.stringify(dataset))}catch(e){}}
+function loadDS(){try{const r=localStorage.getItem(LS_KEY);if(r)dataset=JSON.parse(r)}catch(e){dataset=[]}}
+
+// ---- build metric inputs ----
+(function(){const g=$('#metrics');
+  g.insertAdjacentHTML('beforeend','<div class="head"></div><div class="head">Γηπ.</div><div class="head">Φιλ.</div>');
+  METRICS.forEach(m=>g.insertAdjacentHTML('beforeend',
+    '<div class="name'+(m.k==='red'?' red-row':'')+'">'+m.lab+'</div>'+
+    '<input class="hi" data-k="'+m.k+'" data-s="h" inputmode="decimal">'+
+    '<input class="ai" data-k="'+m.k+'" data-s="a" inputmode="decimal">'));
+})();
+
+$('#h1').onclick=()=>{half=1;$('#h1').classList.add('on');$('#h2').classList.remove('on')};
+$('#h2').onclick=()=>{half=2;$('#h2').classList.add('on');$('#h1').classList.remove('on')};
+
+// ---- PARSER (from validated tests) ----
+function parseText(rawText){
+  const set=(k,s,v)=>{const el=document.querySelector('input[data-k="'+k+'"][data-s="'+s+'"]');if(el&&v!=null&&!Number.isNaN(v))el.value=v};
+  const O2zero=s=>s.replace(/[OoＯ]/g,'0');
+  const lines=rawText.split('\n').map(l=>l.trim()).filter(Boolean);
+  const N=lines.length;
+  const findLabel=re=>lines.findIndex(l=>re.test(l));
+  const LABELS=/(Attacks|Dangerous|Possession|Shots|Timeline|Stats|Table|On Target|xG|Επιθέσ|Επικίνδυν|Κατοχ)/i;
+  function numsAround(idx,span){span=span||2;const acc=[];for(let j=idx+1;j<Math.min(idx+1+span,N);j++){if(LABELS.test(lines[j]))break;const g=(O2zero(lines[j]).match(/\d+/g)||[]);for(const x of g)acc.push(+x);}return acc;}
+  function pickPoss(nums){const n=nums.filter(x=>x>=0&&x<=100);let best=null,be=999;for(let i=0;i+1<n.length;i++){let h=n[i],a=n[i+1],H=h,A=a;if(h<10&&a>=10&&h*10+a>=95&&h*10+a<=105)H=h*10;else if(a<10&&h>=10&&h+a*10>=95&&h+a*10<=105)A=a*10;const e=Math.abs(H+A-100);if(e<be){be=e;best=[H,A];}}return be<=6?best:null;}
+
+  // detect league (first line) + teams if present
+  if(lines[0]&&!$('#league').value)$('#league').value=lines[0];
+  const statsIdx=lines.findIndex(l=>/Stats/i.test(l));
+
+  // extract team names from the score line (only fill if user hasn't typed them)
+  (function(){
+    const block=lines.slice(1,statsIdx>0?statsIdx:lines.length);
+    const scoreRe=/(?:^|\s)([0-9O])\s+([0-9O])(?:\s|$)/;
+    let si=-1,mm=null;
+    for(let i=0;i<block.length;i++){const m=block[i].match(scoreRe);if(m){si=i;mm=m;break;}}
+    if(si<0){for(let i=0;i<block.length;i++){if(/^[0-9O]{2}$/.test(block[i])){si=i;break;}}}
+    if(si<0)return;
+    let homePart='',awayPart='';
+    if(mm){const at=block[si].indexOf(mm[0]);homePart=block[si].slice(0,at).trim();awayPart=block[si].slice(at+mm[0].length).trim();}
+    const above=block.slice(0,si).join(' ').trim();
+    const below=block.slice(si+1).join(' ').trim();
+    const cl=s=>s.replace(/\s+/g,' ').replace(/^[\s.\-']+|[\s.\-']+$/g,'');
+    const home=cl((above+' '+homePart).trim()), away=cl((awayPart+' '+below).trim());
+    if(home&&!$('#teamH').value.trim())$('#teamH').value=home;
+    if(away&&!$('#teamA').value.trim())$('#teamA').value=away;
+  })();
+
+  // SCORE
+  let score=[];
+  if(statsIdx>0){for(let j=statsIdx-1;j>=Math.max(0,statsIdx-4);j--){const c=O2zero(lines[j]);let m=c.match(/(?:^|\s)(\d)\s+(\d)(?:\s|$)/);if(m){score=[+m[1],+m[2]];break;}m=c.match(/(?:^|\s)(\d)(\d)(?:\s|$)/);if(m){score=[+m[1],+m[2]];break;}}}
+  if(score.length===2){set('goals','h',score[0]);set('goals','a',score[1]);}
+
+  const aI=findLabel(/Attacks/i),dI=findLabel(/Dangerous/i),pI=findLabel(/Possession/i);
+  if(aI>=0){const n=numsAround(aI);if(n.length>=2){set('attacks','h',n[0]);set('attacks','a',n[1]);}}
+  if(dI>=0){const n=numsAround(dI);if(n.length>=2){set('danger','h',n[0]);set('danger','a',n[1]);}}
+  if(pI>=0){let n=numsAround(pI,3);if(pI-1>=0&&!LABELS.test(lines[pI-1])){const ab=(O2zero(lines[pI-1]).match(/\d+/g)||[]).map(Number);n=ab.concat(n);}const pp=pickPoss(n);if(pp){set('poss','h',pp[0]);set('poss','a',pp[1]);}}
+
+  const sep=/(\d{1,2})\s*[\/\\|lI]\s*(\d{1,2})/g;let pr=[];
+  for(const l of lines){const c=O2zero(l);let m;sep.lastIndex=0;const loc=[];while((m=sep.exec(c))!==null)loc.push([+m[1],+m[2]]);if(loc.length>=2){pr=loc.slice(0,2);break;}if(loc.length===1&&pr.length<2)pr.push(loc[0]);}
+  if(pr[0]){set('shots','h',pr[0][0]);set('ontarget','h',pr[0][1]);}
+  if(pr[1]){set('shots','a',pr[1][0]);set('ontarget','a',pr[1][1]);}
+
+  if(/xG/i.test(rawText)){const d=(rawText.match(/\d+[.,]\d+/g)||[]).map(x=>parseFloat(x.replace(',','.')));if(d.length>=2){set('xg','h',d[0]);set('xg','a',d[1]);}}
+
+  const filled=[...document.querySelectorAll('#metrics input')].filter(i=>i.value.trim()!=='').length;
+  $('#status').textContent='Διαβάστηκαν '+filled+' τιμές. Έλεγξε/συμπλήρωσε, βάλε λεπτό, αποθήκευσε.';
+  $('#detected').innerHTML='<span>Ανιχνεύθηκε:</span> '+(score.length===2?('σκορ '+score[0]+'-'+score[1]+', '):'')+filled+' πεδία';
+  validate();
+}
+$('#parseBtn').onclick=()=>{const t=$('#paste').value;if(!t.trim()){$('#status').textContent='Δεν υπάρχει κείμενο.';return;}parseText(t);};
+$('#clearPaste').onclick=()=>{$('#paste').value='';$('#status').textContent='';};
+
+$('#metrics').addEventListener('input',validate);
+$('#minute').addEventListener('input',()=>{validate();updateTimingGuide();});
+function updateTimingGuide(){
+  const g=$('#timingGuide');
+  const min=parseFloat($('#minute').value);
+  if(!min&&min!==0){g.className='timing';return;}
+  const endHalf=(half===1)?45:90;
+  const remain=endHalf-min;
+  const isSecondSnap=(snaps.length>=1);
+  let cls,msg;
+  if(isSecondSnap){
+    // this is the trigger snapshot — what matters is remaining time
+    if(remain<4){cls='bad';msg='⚠ Μένουν ~'+remain+"' — πολύ λίγος χρόνος. Η πιθανότητα θα καταρρεύσει ό,τι κι αν δείχνει το momentum.";}
+    else if(remain<8){cls='warn';msg='Μένουν ~'+remain+"' — οριακό. Λειτουργεί, αλλά προτιμότερα 8-10'+ μπροστά.";}
+    else{cls='good';msg='✓ Μένουν ~'+remain+"' — καλό παράθυρο. Αν έχει χτιστεί πίεση από το προηγούμενο snapshot, τώρα φαίνεται.";}
+    // interval check vs previous snapshot
+    if(snaps.length>=1){
+      const prev=snaps[snaps.length-1];
+      if(prev.half===half){
+        const dt=min-prev.minute;
+        if(dt>0&&dt<5)msg+=' · Διάστημα '+dt+"' από το προηγούμενο — λίγο κοντά (θόρυβος). Ιδανικό 8-12'.";
+        else if(dt>=5&&dt<=14)msg+=' · Διάστημα '+dt+"' — ιδανικό.";
+        else if(dt>14)msg+=' · Διάστημα '+dt+"' — μεγάλο, θολώνει το τωρινό momentum.";
+      }
+    }
+  } else {
+    // baseline snapshot
+    if(half===1){
+      if(min<15){cls='warn';msg='Baseline νωρίς ('+min+"'). Πριν το 15' τα στατιστικά είναι ασταθή. Ιδανικό baseline: 20-25'.";}
+      else if(min<=28){cls='good';msg='✓ Καλό baseline ('+min+"'). Τράβα το 2ο σε ~8-12', ή νωρίτερα αν δεις πίεση.";}
+      else if(min<=35){cls='warn';msg='Baseline κάπως αργά ('+min+"'). Άφησε 8-10' για το 2ο πριν το ημίχρονο.";}
+      else{cls='bad';msg='Baseline πολύ αργά ('+min+"') — δεν θα μείνει χρόνος για ουσιαστικό 2ο snapshot στο Α' ημίχρονο.";}
+    } else {
+      if(min<50){cls='good';msg='✓ Καλό baseline Β\u2032 ('+min+"'). Τράβα το 2ο σε ~8-12'.";}
+      else if(min<=80){cls='good';msg='✓ Baseline ('+min+"'). Άφησε 8-10' για το 2ο.";}
+      else{cls='warn';msg='Baseline αργά ('+min+"') — λίγος χρόνος ως το τέλος.";}
+    }
+  }
+  g.className='timing show '+cls;g.textContent=msg;
+}
+$('#h1').addEventListener('click',updateTimingGuide);
+$('#h2').addEventListener('click',updateTimingGuide);
+function validate(){
+  const okMin=$('#minute').value.trim()!=='';
+  const okVal=[...document.querySelectorAll('#metrics input')].some(i=>i.value.trim()!=='');
+  $('#save').disabled=!(okMin&&okVal);
+}
+
+$('#save').onclick=()=>{
+  if(!matchId)matchId='M'+Date.now();
+  const snap={minute:parseFloat($('#minute').value)||0,half,vals:{}};
+  METRICS.forEach(m=>{
+    const h=document.querySelector('input[data-k="'+m.k+'"][data-s="h"]').value;
+    const a=document.querySelector('input[data-k="'+m.k+'"][data-s="a"]').value;
+    snap.vals[m.k]={h:h===''?null:parseFloat(h),a:a===''?null:parseFloat(a)};
+  });
+  snaps.push(snap);snaps.sort((x,y)=>(x.half-y.half)||(x.minute-y.minute));
+  document.querySelectorAll('#metrics input').forEach(i=>i.value='');
+  $('#minute').value='';$('#paste').value='';$('#detected').innerHTML='';
+  $('#timingGuide').className='timing';
+  $('#snapnum').textContent='#'+(snaps.length+1);
+  renderSnaps();decide();validate();
+};
+
+function renderSnaps(){
+  const box=$('#snaps');
+  if(!snaps.length){box.innerHTML='<div class="empty">Κανένα ακόμη.</div>';return;}
+  box.innerHTML=snaps.map((s,i)=>{const g=s.vals.goals,ot=s.vals.ontarget;
+    return '<div class="snapline"><span><span class="m">'+(s.half===2?"Β′ ":"Α′ ")+s.minute+"'"+'</span> — γκολ '+(g.h??'?')+'-'+(g.a??'?')+', στο τέρμα '+(ot.h??'?')+'-'+(ot.a??'?')+'</span><span class="x" data-i="'+i+'">✕</span></div>'}).join('');
+  box.querySelectorAll('.x').forEach(x=>x.onclick=e=>{snaps.splice(+e.target.dataset.i,1);renderSnaps();decide()});
+}
+
+// ---- DECISION ENGINE ----
+function decide(){
+  const card=$('#verdictCard'),out=$('#verdict'),foot=$('#vfoot'),rw=$('#redwarn');
+  if(snaps.length<2){card.style.display='none';lastAnalysis=null;return;}
+  card.style.display='block';
+  const A=snaps[snaps.length-2],B=snaps[snaps.length-1];
+  const s1=A.minute<=B.minute?A:B,s2=A.minute<=B.minute?B:A;
+  const dt=Math.max(1,s2.minute-s1.minute);
+  const endHalf=(s2.half===1)?45:90;
+  const remain=Math.max(0,endHalf-s2.minute);
+  const H=$('#teamH').value||'Γηπ.',AW=$('#teamA').value||'Φιλ.';
+
+  // red cards from latest snapshot
+  const redH=s2.vals.red?.h||0, redA=s2.vals.red?.a||0;
+  let redMult_h=1,redMult_a=1,redMsg='';
+  if(redH>=2){redMult_a=2;redMult_h=0;redMsg='<b>'+redH+' κόκκινες</b> στον '+H+' → momentum υπέρ '+AW+' (×2), '+H+' μηδενίζεται.';}
+  else if(redA>=2){redMult_h=2;redMult_a=0;redMsg='<b>'+redA+' κόκκινες</b> στον '+AW+' → momentum υπέρ '+H+' (×2), '+AW+' μηδενίζεται.';}
+  else if(redH>=1||redA>=1){const who=redH>=1?H:AW;redMsg='<b>Αποβολή</b> στον '+who+'. Κατά τον κανόνα σου, μάλλον δεν παίζεις αυτό το ματς.';}
+  if(redMsg){rw.innerHTML=redMsg;rw.classList.add('show');}else{rw.classList.remove('show');}
+
+  let rateH=0,rateA=0;
+  METRICS.forEach(m=>{
+    if(!m.press||m.w===0)return;
+    const a=s1.vals[m.k]||{},b=s2.vals[m.k]||{};
+    if(a.h==null||b.h==null||a.a==null||b.a==null)return;
+    rateH+=((b.h-a.h)/dt)*m.w; rateA+=((b.a-a.a)/dt)*m.w;
+  });
+  rateH*=redMult_h; rateA*=redMult_a;
+  rateH=Math.max(0,rateH); rateA=Math.max(0,rateA);
+  const rateTotal=rateH+rateA;
+  const lambda=K*rateTotal*remain;
+  let p=1-Math.exp(-lambda); if(!isFinite(p)||p<0)p=0; if(p>0.97)p=0.97;
+  const minOdds=p>0.01?(1/p):99;
+  const denom=rateTotal>0?rateTotal:1;
+  const barH=Math.round(rateH/denom*100),barA=100-barH;
+
+  let band,cls;
+  if(remain<4){band='ΛΙΓΟΣ ΧΡΟΝΟΣ';cls='no';}
+  else if(p>=0.55){band='ΑΞΙΖΕΙ';cls='yes';}
+  else if(p>=0.38){band='ΟΡΙΑΚΟ';cls='mid';}
+  else{band='ΔΕΝ ΑΞΙΖΕΙ';cls='no';}
+  const pct=Math.round(p*100);
+  const fill=cls==='yes'?'var(--yes)':cls==='mid'?'var(--mid)':'var(--no)';
+
+  out.innerHTML='<div class="verdict"><div class="vhead">Υπόλοιπο '+(s2.half===1?'Α′':'Β′')+' ημιχρόνου · ~'+remain+"' · οποιαδήποτε ομάδα</div>"+
+    '<div class="probwrap"><div class="probtop"><span class="problab">Πιθανότητα γκολ</span><span class="probval '+cls+'">'+p.toFixed(2)+'</span></div>'+
+    '<div class="pbar"><i style="width:'+pct+'%;background:'+fill+'"></i><div class="pticks"><span style="left:38%"></span><span style="left:55%"></span></div></div>'+
+    '<div class="scale"><span>0</span><span>0.38</span><span>0.55</span><span>1</span></div></div>'+
+    '<div class="desc '+cls+'">'+band+'</div>'+
+    (band==='ΛΙΓΟΣ ΧΡΟΝΟΣ'?'':'<div class="odds">Ελάχιστη απόδοση για value: <b>'+minOdds.toFixed(2)+'</b><div class="who">Πάνω από αυτό → value (κατά την εκτίμηση). Πίεση: '+barH+'% '+H+' / '+barA+'% '+AW+'</div></div>')+
+    '</div>';
+  foot.innerHTML='λ='+lambda.toFixed(2)+' · ρυθμός '+rateTotal.toFixed(2)+' μον./λεπτό · διάστημα '+dt+"' · Poisson P=1−e^(−λ), fair=1/P."+
+    '<br><b>Heuristic, μη βαθμονομημένο</b> — input στην κρίση σου, όχι έτοιμο edge.';
+
+  // stash the full raw row awaiting outcome
+  lastAnalysis={s1,s2,dt,remain,rateH,rateA,lambda,p,minOdds,H,AW};
+  $('#commitRow').disabled=(pendingOutcome===null);
+
+  // odds/value check
+  const MARGIN=0.06;
+  const valueThreshold=(p>0.01)?(minOdds/(1-MARGIN)):999;
+  lastAnalysis.valueThreshold=valueThreshold;
+  if(band==='ΛΙΓΟΣ ΧΡΟΝΟΣ'){$('#oddsCheck').style.display='none';}
+  else{$('#oddsCheck').style.display='block';updateValueVerdict();}
+}
+
+function updateValueVerdict(){
+  const box=$('#valueVerdict');
+  if(!lastAnalysis){box.className='vverdict';return;}
+  const p=lastAnalysis.p, fair=lastAnalysis.minOdds, thr=lastAnalysis.valueThreshold;
+  const raw=$('#liveOdds').value.replace(',','.');
+  const odds=parseFloat(raw);
+  if(!odds||odds<=1){box.className='vverdict';box.innerHTML='';return;}
+  const isValue=odds>=thr;
+  box.className='vverdict show '+(isValue?'value':'novalue');
+  box.innerHTML='<div class="big">'+(isValue?'✓ VALUE — ΠΑΙΞΕ':'✗ ΟΧΙ VALUE')+'</div>'+
+    '<div class="nums">απόδοση '+odds.toFixed(2)+' vs κατώφλι value '+thr.toFixed(2)+
+    ' · fair '+fair.toFixed(2)+' · p='+p.toFixed(2)+' · margin 6%</div>'+
+    '<div class="nums" style="margin-top:4px;color:'+(isValue?'var(--yes)':'var(--no)')+'">'+
+    (isValue?('πλεόνασμα '+(((odds/thr)-1)*100).toFixed(0)+'% πάνω από το κατώφλι'):('λείπει '+(((thr/odds)-1)*100).toFixed(0)+'% για value'))+'</div>'+
+    '<div class="nums" style="margin-top:5px;opacity:.7">Βασίζεται στο μη βαθμονομημένο μοντέλο — κατεύθυνση, όχι εντολή.</div>';
+}
+document.addEventListener('input',e=>{if(e.target&&e.target.id==='liveOdds')updateValueVerdict();});
+
+// ---- OUTCOME + DATASET ----
+$('#outcomeBtns').addEventListener('click',e=>{
+  if(e.target.tagName!=='BUTTON')return;
+  pendingOutcome=e.target.dataset.o;
+  [...$('#outcomeBtns').children].forEach(b=>b.classList.remove('sel'));
+  e.target.classList.add('sel');
+  $('#commitRow').disabled=(lastAnalysis===null);
+});
+
+const HEADER=['match_id','date','league','home_team','away_team','half',
+  'A_min','B_min','dt_min','remain_min',
+  ...METRICS.flatMap(m=>['A_'+m.k+'_h','A_'+m.k+'_a']),
+  ...METRICS.flatMap(m=>['B_'+m.k+'_h','B_'+m.k+'_a']),
+  'rate_h','rate_a','lambda','prob','min_odds','value_threshold',
+  'goal_next','goal_team','book_odds','model_value'];
+
+function buildRow(){
+  const a=lastAnalysis;if(!a)return null;
+  const g=(snap,k,s)=>{const v=snap.vals[k]?.[s];return v==null?'':v};
+  const row={
+    match_id:matchId,date:new Date().toISOString().slice(0,10),
+    league:$('#league').value||'',home_team:a.H,away_team:a.AW,half:a.s2.half,
+    A_min:a.s1.minute,B_min:a.s2.minute,dt_min:a.dt,remain_min:a.remain
+  };
+  METRICS.forEach(m=>{row['A_'+m.k+'_h']=g(a.s1,m.k,'h');row['A_'+m.k+'_a']=g(a.s1,m.k,'a');});
+  METRICS.forEach(m=>{row['B_'+m.k+'_h']=g(a.s2,m.k,'h');row['B_'+m.k+'_a']=g(a.s2,m.k,'a');});
+  row.rate_h=a.rateH.toFixed(3);row.rate_a=a.rateA.toFixed(3);row.lambda=a.lambda.toFixed(3);
+  row.prob=a.p.toFixed(3);row.min_odds=a.minOdds.toFixed(2);
+  row.value_threshold=a.valueThreshold?a.valueThreshold.toFixed(2):'';
+  row.goal_next=(pendingOutcome==='no')?0:1;
+  row.goal_team=(pendingOutcome==='no')?'':pendingOutcome;
+  const lo=$('#liveOdds').value||'';
+  row.book_odds=lo;
+  // record whether the tool flagged value at that odds (for later profitability analysis)
+  const oddsN=parseFloat(String(lo).replace(',','.'));
+  row.model_value=(oddsN&&a.valueThreshold)?(oddsN>=a.valueThreshold?1:0):'';
+  return row;
+}
+
+$('#commitRow').onclick=()=>{
+  const row=buildRow();if(!row)return;
+  dataset.push(row);saveDS();renderDataset();
+  pendingOutcome=null;[...$('#outcomeBtns').children].forEach(b=>b.classList.remove('sel'));
+  $('#liveOdds').value='';$('#valueVerdict').className='vverdict';$('#commitRow').disabled=true;
+  $('#dsStatus').textContent='Καταχωρήθηκε γραμμή. Σύνολο: '+dataset.length;
+};
+
+function tsv(rows){return rows.map(r=>HEADER.map(h=>r[h]??'').join('\t')).join('\n');}
+function csv(rows){const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';return [HEADER.map(q).join(',')].concat(rows.map(r=>HEADER.map(h=>q(r[h])).join(','))).join('\r\n');}
+
+function renderDataset(){
+  $('#dsCount').textContent=dataset.length+' γραμμές';
+  const box=$('#dsList');
+  if(!dataset.length){box.innerHTML='<div class="empty">Καμία καταχώρηση.</div>';return;}
+  box.innerHTML=dataset.slice(-6).reverse().map(r=>
+    '<div class="dataset-row"><span class="info">'+r.home_team+'–'+r.away_team+' '+r.A_min+"'→"+r.B_min+"'"+'</span><span>p='+r.prob+' → '+(r.goal_next==1?('γκολ '+(r.goal_team||'')):'όχι')+'</span></div>'
+  ).join('')+(dataset.length>6?'<div class="empty" style="padding:6px">…και '+(dataset.length-6)+' ακόμη</div>':'');
+}
+
+$('#copyAll').onclick=async()=>{
+  if(!dataset.length){$('#dsStatus').textContent='Άδειο dataset.';return;}
+  const text=tsv(dataset);
+  try{await navigator.clipboard.writeText(text);$('#dsStatus').textContent='Αντιγράφηκαν '+dataset.length+' γραμμές (tab-sep). Paste στο Google Sheets.';}
+  catch(e){
+    // fallback: show a textarea to copy manually
+    const ta=document.createElement('textarea');ta.value=text;ta.style.cssText='position:fixed;top:10%;left:5%;width:90%;height:60%;z-index:9999';document.body.appendChild(ta);ta.select();
+    $('#dsStatus').textContent='Αντίγραψε χειροκίνητα από το πλαίσιο, μετά κλείσ\' το (διπλό tap εκτός).';
+    ta.onblur=()=>ta.remove();
+  }
+};
+$('#copyHeader').onclick=async()=>{
+  try{await navigator.clipboard.writeText(HEADER.join('\t'));$('#dsStatus').textContent='Κεφαλίδα αντιγράφηκε — paste στην 1η γραμμή του Sheet.';}
+  catch(e){$('#dsStatus').textContent='Δεν έγινε αντιγραφή.';}
+};
+$('#downloadCsv').onclick=()=>{
+  if(!dataset.length){$('#dsStatus').textContent='Άδειο dataset.';return;}
+  const blob=new Blob(['\uFEFF'+csv(dataset)],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='next_goal_dataset.csv';a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),1000);
+  $('#dsStatus').textContent='Κατέβηκε CSV με '+dataset.length+' γραμμές.';
+};
+
+$('#reset').onclick=()=>{
+  if(confirm('Νέος αγώνας; (το dataset παραμένει)')){
+    snaps=[];matchId=null;half=1;pendingOutcome=null;lastAnalysis=null;
+    $('#h1').classList.add('on');$('#h2').classList.remove('on');
+    $('#snapnum').textContent='#1';$('#teamH').value='';$('#teamA').value='';$('#league').value='';
+    $('#paste').value='';$('#detected').innerHTML='';$('#status').textContent='';
+    document.querySelectorAll('#metrics input').forEach(i=>i.value='');$('#minute').value='';
+    renderSnaps();$('#verdictCard').style.display='none';
+  }
+};
+
+loadDS();renderDataset();renderSnaps();
+</script>
+</body>
+</html>
